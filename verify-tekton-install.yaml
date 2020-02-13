@@ -1,0 +1,65 @@
+---
+- hosts: localhost
+  vars:
+    operator_name: openshift-pipelines-operator
+    operator_version: v0.8.2
+    supported_api_versions:
+     - v1alpha1
+    crds:
+     - clustertasks
+     - conditions
+     - pipelineresources
+     - pipelineruns
+     - pipelines
+     - tasks
+     - taskruns
+    api_group: tekton.dev
+    kubeconfig: <path to your kubeconfig>>
+    tkn_api_versions: []
+    expected_tkn_api_versions:
+      - clustertasks: 
+          - v1alpha1
+      - conditions: 
+          - v1alpha1
+      - pipelineresources: 
+          - v1alpha1
+      - pipelineruns: 
+          - v1alpha1
+      - tasks: 
+          - v1alpha1
+      - taskruns:
+          - v1alpha1
+  tasks:
+    - name: find tekton subscription
+      set_fact:
+        tkn_sub: "{{ lookup('k8s',kubeconfig=kubeconfig, api_version='operators.coreos.com/v1alpha1', kind='Subscription',namespace='openshift-operators', resource_name='openshift-pipelines') | json_query('status.installedCSV') }}"
+       
+    - set_fact:
+        tkn_installed: "{{operator_name + '.' + tkn_sub == operator_name + '.' + operator_version}}"
+    
+    # - debug: 
+    #    msg: "{{tkn_installed}}"
+
+    - name: Checking if right version of Tekton is installed
+      fail:
+        msg: "Right version of Tekton not installed expecting {{operator_version}} but got {{tkn_sub}} "
+      when: tkn_installed
+
+    - name: find Tekton API versions
+      set_fact:
+        tkn_api_versions: "{{ tkn_api_versions + [{ item : lookup('k8s',kubeconfig=kubeconfig, api_version='apiextensions.k8s.io/v1', kind='CustomResourceDefinition', resource_name='tasks.'+api_group) | json_query('spec.versions[*].name')}] }}"
+      with_items: "{{crds}}"
+    
+    # - debug:
+    #    msg: "{{tkn_api_versions}}" 
+
+    - set_fact: 
+       api_delta: "{{ expected_tkn_api_versions  | difference(tkn_api_versions) }}"
+    
+    # - debug:
+    #    msg: "{{api_delta}}" 
+
+    - name: Is there is difference in API versions
+      fail: 
+        msg: "There is difference in API: {{api_delta}}"
+      when: api_delta | length > 0
