@@ -29,37 +29,71 @@
           - v1alpha1
       - taskruns:
           - v1alpha1
+    do_api_checks: False
   tasks:
     - name: find tekton subscription
       set_fact:
         tkn_sub: "{{ lookup('k8s',kubeconfig=kubeconfig, api_version='operators.coreos.com/v1alpha1', kind='Subscription',namespace='openshift-operators', resource_name='openshift-pipelines') | json_query('status.installedCSV') }}"
-       
+      when: do_api_checks
+
     - set_fact:
         tkn_installed: "{{operator_name + '.' + tkn_sub == operator_name + '.' + operator_version}}"
-    
+      when: do_api_checks
     # - debug: 
     #    msg: "{{tkn_installed}}"
+    #   when: do_api_checks
 
     - name: Checking if right version of Tekton is installed
       fail:
         msg: "Right version of Tekton not installed expecting {{operator_version}} but got {{tkn_sub}} "
-      when: tkn_installed
-
+      when: do_api_checks and tkn_installed 
+ 
     - name: find Tekton API versions
       set_fact:
-        tkn_api_versions: "{{ tkn_api_versions + [{ item : lookup('k8s',kubeconfig=kubeconfig, api_version='apiextensions.k8s.io/v1', kind='CustomResourceDefinition', resource_name='tasks.'+api_group) | json_query('spec.versions[*].name')}] }}"
+        tkn_api_versions: "{{ tkn_api_versions + [{ item : lookup('k8s',kubeconfig=kubeconfig, api_version='apiextensions.k8s.io/v1beta1', kind='CustomResourceDefinition', resource_name='tasks.'+api_group) | json_query('spec.versions[*].name')}] }}"
       with_items: "{{crds}}"
+      when: do_api_checks
     
     # - debug:
     #    msg: "{{tkn_api_versions}}" 
+    #   when: do_api_checks
 
     - set_fact: 
        api_delta: "{{ expected_tkn_api_versions  | difference(tkn_api_versions) }}"
-    
+      when: do_api_checks
     # - debug:
     #    msg: "{{api_delta}}" 
+    #   when: do_api_checks
 
     - name: Is there is difference in API versions
       fail: 
         msg: "There is difference in API: {{api_delta}}"
-      when: api_delta | length > 0
+      when: do_api_checks and api_delta | length > 0
+    
+    - name: Check if tkn installed
+      shell: tkn version
+      register: tkn_version
+    
+    - name: Check if "tkn version is v0.6.0
+      fail: 
+        msg: Check if tkn version is v0.6.0
+      when: not tkn_version.stdout is search('v0.6.0')
+    
+    - name: Check if yq exists
+      shell: yq --version
+      register: yq_version
+    
+    - name: Check if "yq version 2.4.1"
+      fail: 
+        msg: Check if "yq version 2.4.1"
+      when: not yq_version.stdout is search('2.4.1')
+
+    - name: Check if kn installed
+      shell: kn version
+      register: kn_version
+    
+    - name: Check if "kn version is v0.12.0
+      fail: 
+        msg: Check if kn version is v0.12.0
+      when: not kn_version.stdout is search('v0.12.0')
+    
