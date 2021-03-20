@@ -7,7 +7,7 @@ cryptography==2.8
 dictdiffer==0.8.1
 google-auth==1.11.0
 idna==2.8
-Jinja2==2.11.1
+Jinja2==2.11.3
 jmespath==0.9.4
 kubernetes==10.0.1
 MarkupSafe==1.1.1
